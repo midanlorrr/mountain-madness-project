@@ -143,18 +143,26 @@ import './App.css'
 import { GoogleGenAI } from "@google/genai";
 
 export default function App() {
-  useEffect(()=>{
-    // The client gets the API key from the environment variable `GEMINI_API_KEY`.
-    const ai = new GoogleGenAI({});
+  useEffect(() => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+    const ai = new GoogleGenAI({ apiKey });
 
     async function main() {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: "Explain how AI works in a few words",
-      });
-      console.log(response.text);
-    }
-    main();
+      try {
+        const result = await ai.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents: "Explain how AI works in a few words",
+        });
 
-  }, [])
+        console.log(result.text);
+      } catch (error) {
+        console.error("Error calling Gemini:", error);
+      }
+    }
+
+    main();
+  }, []);
+
+  return <div>Check console for response</div>;
 }
