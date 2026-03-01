@@ -52,7 +52,7 @@ export function usePostureTracking() {
 
     // 2b. Face Forward Detection (nose near shoulder midpoint)
     const faceOffset = Math.abs(nose.x - shoulderMidX);
-    const currentIsFacingForward = faceOffset < 0.015;
+    const currentIsFacingForward = faceOffset < 0.05;
     setIsFacingForward(currentIsFacingForward);
 
     // 3. Clasped Hands Detection

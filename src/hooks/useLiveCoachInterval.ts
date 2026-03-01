@@ -120,7 +120,7 @@ export function useLiveCoachInterval(props: LiveCoachIntervalProps) {
 
     if (postureKey && postureKey !== lastPostureIssueRef.current) {
       const now = Date.now();
-      if (now - lastPostureWarningTimeRef.current > 10000) {
+      if (now - lastPostureWarningTimeRef.current > 15000) {
         lastPostureIssueRef.current = postureKey;
         lastPostureWarningTimeRef.current = now;
         if (current.onCoachingGenerated) {
@@ -152,7 +152,7 @@ export function useLiveCoachInterval(props: LiveCoachIntervalProps) {
       if (!current.transcript) return;
 
       const now = Date.now();
-      if (now - lastSpeechAnalysisTimeRef.current < 10000) {
+      if (now - lastSpeechAnalysisTimeRef.current < 15000) {
         return;
       }
 
