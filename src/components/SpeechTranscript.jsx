@@ -45,6 +45,7 @@ export function SpeechTranscript({ transcript, interimTranscript, isListening, e
           fontFamily: 'monospace',
           fontSize: 14,
           lineHeight: 1.6,
+          color: '#000000'
         }}
       >
         {transcript || <em style={{ color: '#999' }}>Your words will appear here...</em>}

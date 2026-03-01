@@ -1,72 +1,125 @@
 import { useEffect, useRef, useState } from 'react'
 
-export function useSpeechRecognition() {
+// Common filler words to track
+const FILLER_WORDS = ['um', 'uh', 'like', 'basically', 'so']
+
+/**
+ * Custom hook for real-time speech recognition using Web Speech API
+ * Tracks transcript and counts filler words
+ */
+export default function useSpeechRecognition(active) {
   const [transcript, setTranscript] = useState('')
   const [interimTranscript, setInterimTranscript] = useState('')
   const [isListening, setIsListening] = useState(false)
-  const [error, setError] = useState('')
-  const [isSupported, setIsSupported] = useState(true)
-
+  const [fillerCount, setFillerCount] = useState(0)
   const recognitionRef = useRef(null)
 
   useEffect(() => {
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition
-
-    if (!SpeechRecognitionAPI) {
-      setIsSupported(false)
-      setError('Speech recognition not supported in this browser. Use Chrome or Edge.')
+    // Check if Web Speech API is supported
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      console.error('Speech recognition not supported in this browser')
       return
     }
 
-    const recognition = new SpeechRecognitionAPI()
+    // Create recognition instance
+    const recognition = new SpeechRecognition()
     recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = 'en-US'
 
-    recognition.onstart = () => {
-      setIsListening(true)
-      setError('')
-    }
-
-    recognition.onend = () => {
-      setIsListening(false)
-    }
-
-    recognition.onerror = (event) => {
-      setError(`Speech error: ${event.error}`)
-    }
-
+    // Handle speech results
     recognition.onresult = (event) => {
       let interim = ''
-      let committed = ''
+      let final = ''
 
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      // Process all results from this event
+      for (let i = event.resultIndex; i < event.results.length; i++) {
         const text = event.results[i][0].transcript
 
         if (event.results[i].isFinal) {
-          committed += ` ${text}`
+          final += ` ${text}`
         } else {
           interim += text
         }
       }
 
-      if (committed) {
-        setTranscript((prev) => `${prev} ${committed}`.trim())
+      // Update final transcript
+      if (final) {
+        setTranscript((prev) => {
+          const updated = `${prev} ${final}`.trim()
+          
+          // Count filler words in the full transcript
+          const lowerText = updated.toLowerCase()
+          const count = FILLER_WORDS.reduce((sum, word) => {
+            // Use word boundaries to match whole words only
+            const regex = new RegExp(`\\b${word}\\b`, 'g')
+            const matches = lowerText.match(regex)
+            return sum + (matches ? matches.length : 0)
+          }, 0)
+          
+          setFillerCount(count)
+          return updated
+        })
       }
 
+      // Update interim transcript
       setInterimTranscript(interim.trim())
+    }
+
+    recognition.onstart = () => {
+      setIsListening(true)
+    }
+
+    recognition.onend = () => {
+      setIsListening(false)
+      // Auto-restart if still active
+      if (active && recognitionRef.current) {
+        try {
+          recognitionRef.current.start()
+        } catch (error) {
+          // Ignore if already started
+        }
+      }
+    }
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error)
+      if (event.error === 'no-speech') {
+        // This is normal, just continue
+        return
+      }
+      setIsListening(false)
     }
 
     recognitionRef.current = recognition
 
-    return () => {
-      recognition.stop()
+    // Auto-start if active
+    if (active) {
+      try {
+        recognition.start()
+      } catch (error) {
+        console.error('Failed to start recognition:', error)
+      }
     }
-  }, [])
 
+    // Cleanup
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop()
+        recognitionRef.current = null
+      }
+    }
+  }, [active])
+
+  // Manual control functions
   const startListening = () => {
     if (recognitionRef.current && !isListening) {
-      recognitionRef.current.start()
+      try {
+        recognitionRef.current.start()
+      } catch (error) {
+        console.error('Failed to start:', error)
+      }
     }
   }
 
@@ -80,14 +133,14 @@ export function useSpeechRecognition() {
   const resetTranscript = () => {
     setTranscript('')
     setInterimTranscript('')
+    setFillerCount(0)
   }
 
   return {
     transcript,
     interimTranscript,
     isListening,
-    error,
-    isSupported,
+    fillerCount,
     startListening,
     stopListening,
     resetTranscript,
