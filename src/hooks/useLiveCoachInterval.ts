@@ -119,11 +119,15 @@ export function useLiveCoachInterval(props: LiveCoachIntervalProps) {
     const postureKey = postureIssue?.key ?? "";
 
     if (postureKey && postureKey !== lastPostureIssueRef.current) {
-      lastPostureIssueRef.current = postureKey;
-      if (current.onCoachingGenerated) {
-        current.onCoachingGenerated(postureIssue!.voice);
+      const now = Date.now();
+      if (now - lastPostureWarningTimeRef.current > 10000) {
+        lastPostureIssueRef.current = postureKey;
+        lastPostureWarningTimeRef.current = now;
+        if (current.onCoachingGenerated) {
+          current.onCoachingGenerated(postureIssue!.voice);
+        }
+        void speakNonOverlapping(postureIssue!.voice);
       }
-      void speakNonOverlapping(postureIssue!.voice);
     }
 
     if (!postureKey) {
@@ -148,7 +152,7 @@ export function useLiveCoachInterval(props: LiveCoachIntervalProps) {
       if (!current.transcript) return;
 
       const now = Date.now();
-      if (now - lastSpeechAnalysisTimeRef.current < 5000) {
+      if (now - lastSpeechAnalysisTimeRef.current < 10000) {
         return;
       }
 
