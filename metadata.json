@@ -1,0 +1,8 @@
+{
+  "name": "StandTall",
+  "description": "A real-time posture and speech coach using MediaPipe Pose and Web Speech API.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
