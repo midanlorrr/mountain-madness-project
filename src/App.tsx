@@ -10,6 +10,7 @@ import { usePostureTracking } from "./hooks/usePostureTracking";
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 import { useVideoRecorder } from "./hooks/useVideoRecorder";
 import { getLiveFeedback } from "./services/geminiService";
+import { speakTextOnce } from "./services/elevenLabsService";
 import { 
   Camera, 
   CameraOff, 
@@ -23,7 +24,8 @@ import {
   Brain,
   Terminal,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  Volume2
 } from "lucide-react";
 
 export default function App() {
@@ -35,6 +37,7 @@ export default function App() {
   const [liveFeedback, setLiveFeedback] = useState<string | null>(null);
   const [coachRecommendations, setCoachRecommendations] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSpeakingPosture, setIsSpeakingPosture] = useState(false);
 
   const { feedback, chinLevel, wristDist, isCrossed, isClasped, analyzePosture } = usePostureTracking();
   
@@ -89,6 +92,20 @@ export default function App() {
     if (!transcript) return;
     setView("analysis");
   }, [transcript]);
+
+  const handleReadPosture = useCallback(async () => {
+    const message = cameraEnabled ? feedback.message : "Camera is disabled. Enable camera for posture feedback.";
+
+    setIsSpeakingPosture(true);
+    try {
+      await speakTextOnce(message);
+    } catch (err) {
+      console.error("Failed to read posture feedback:", err);
+      alert("Could not play ElevenLabs audio. Check your API key and browser audio permissions.");
+    } finally {
+      setIsSpeakingPosture(false);
+    }
+  }, [cameraEnabled, feedback.message]);
 
   const handleStart = useCallback(async () => {
     if (!micEnabled) {
@@ -364,6 +381,23 @@ export default function App() {
             <div className={`feedback-banner ${feedback.isGood ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
               {cameraEnabled ? feedback.message : "Enable camera for posture feedback"}
             </div>
+            <button
+              onClick={handleReadPosture}
+              disabled={isSpeakingPosture}
+              className="mt-3 w-full btn-secondary flex items-center justify-center gap-2"
+            >
+              {isSpeakingPosture ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Reading posture...
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-4 h-4" />
+                  Read posture once
+                </>
+              )}
+            </button>
           </div>
         </section>
 
