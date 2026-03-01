@@ -13,6 +13,7 @@ import { useVideoRecorder } from "./hooks/useVideoRecorder";
 import { useLiveCoachInterval } from "./hooks/useLiveCoachInterval";
 import { getLiveFeedback, getComprehensiveSpeechAnalysis } from "./services/geminiService";
 import { speakTextOnce } from "./services/elevenLabsService";
+import logo from "./assets/logo.svg";
 import { 
   Camera, 
   CameraOff, 
@@ -81,6 +82,9 @@ export default function App() {
     postureFeedback: feedback.message,
     isCrossed,
     isClasped,
+    onCoachingGenerated: (coaching) => {
+      setCoachRecommendations(prev => [...prev, coaching]);
+    },
   });
 
   const [displayedSttError, setDisplayedSttError] = useState<string | null>(null);
@@ -120,6 +124,14 @@ export default function App() {
       activeAudioStreamRef.current = null;
     }
   }, [stopSpeechRecording, stopVideoRecording]);
+
+  // Stop all processes immediately when session ends
+  React.useEffect(() => {
+    if (sessionEnded) {
+      console.log("🛑 Session ended - stopping all processes");
+      handleStop();
+    }
+  }, [sessionEnded, handleStop]);
 
   const handleStartAnalysis = useCallback(() => {
     if (!transcript) return;
@@ -217,10 +229,46 @@ export default function App() {
   const synchronizedTranscript = useMemo(() => {
     if (!transcript) return null;
     
-    // Use full transcript directly for better accuracy with ElevenLabs STT
-    const words = transcript.split(/\s+/);
     const fillerWordsList = ["um", "uh", "like", "basically", "so"];
     
+    // If segments exist, use them for timestamp-based highlighting
+    if (segments.length > 0) {
+      return (
+        <div className="space-y-2 leading-relaxed">
+          {segments.map((segment, segIdx) => (
+            <div
+              key={segIdx}
+              className={`p-2 rounded transition-all ${
+                activeSegmentIndex === segIdx
+                  ? "bg-yellow-200 border-l-4 border-yellow-500 scale-105"
+                  : "bg-transparent"
+              }`}
+            >
+              <div className="flex flex-wrap">
+                {segment.text.split(/\s+/).map((word, i) => {
+                  const cleanWord = word.toLowerCase().replace(/[^a-z]/g, "");
+                  if (fillerWordsList.includes(cleanWord)) {
+                    return (
+                      <span key={i} className="text-red-500 font-bold underline decoration-red-300 mx-1">
+                        {word}
+                      </span>
+                    );
+                  }
+                  return (
+                    <span key={i} className="mx-1">
+                      {word}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    
+    // Fallback: display full transcript without segment highlighting
+    const words = transcript.split(/\s+/);
     return (
       <div className="space-y-1 leading-relaxed">
         {words.map((word, i) => {
@@ -232,13 +280,16 @@ export default function App() {
         })}
       </div>
     );
-  }, [transcript]);
+  }, [transcript, segments, activeSegmentIndex]);
 
   // Mission Header Component (reusable)
   const MissionHeader = () => (
     <div className="bg-gradient-to-r from-emerald-600 to-blue-600 text-white py-3 px-4 shadow-lg">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-        <h2 className="text-sm font-bold tracking-wide">StageSense</h2>
+        <div className="flex items-center gap-3">
+          {/* <img src={logo} alt="StageSense Logo" className="h-8 w-8" /> */}
+          <h2 className="text-sm font-bold tracking-wide">StageSense</h2>
+        </div>
         <div className="flex items-center gap-2 text-xs bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full border border-white/30">
           <User className="w-4 h-4" />
           <span className="font-medium">Default User</span>
@@ -355,6 +406,24 @@ export default function App() {
               </motion.div>
             </div>
 
+            {/* Scroll Indicator - Between video/transcript and AI Analysis */}
+            {!isLoadingAnalysis && speechAnalysis && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.8, delay: 0.15 }}
+                className="text-center py-4"
+              >
+                <motion.div
+                  animate={{ y: [0, 8, 0] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                  className="inline-block py-3 px-6 bg-purple-100/50 rounded-xl border-2 border-purple-200"
+                >
+                  <span className="text-purple-700 text-lg font-bold">↓ Scroll down for detailed AI analysis ↓</span>
+                </motion.div>
+              </motion.div>
+            )}
+
             {/* Bottom: Full-width AI Analysis */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -362,21 +431,10 @@ export default function App() {
               transition={{ duration: 0.8, delay: 0.2 }}
             >
               <section className="card-base p-8 flex flex-col border-2 border-purple-100 shadow-lg shadow-purple-100/50 bg-gradient-to-br from-purple-50/20 to-pink-50/20">
-                <h2 className="text-2xl font-bold flex items-center gap-3 mb-3">
+                <h2 className="text-2xl font-bold flex items-center gap-3 mb-6">
                   <Brain className="w-6 h-6 text-purple-600" />
                   <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">AI Analysis</span>
                 </h2>
-                
-                {/* Scroll Indicator - More prominent at top */}
-                {!isLoadingAnalysis && speechAnalysis && (
-                  <motion.div
-                    animate={{ y: [0, 5, 0] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                    className="text-center py-3 mb-4 bg-purple-100/50 rounded-xl border-2 border-purple-200"
-                  >
-                    <span className="text-purple-700 text-lg font-bold">↓ Scroll down for detailed breakdown ↓</span>
-                  </motion.div>
-                )}
                 
                 {isLoadingAnalysis ? (
                   <div className="flex-grow flex items-center justify-center py-20">

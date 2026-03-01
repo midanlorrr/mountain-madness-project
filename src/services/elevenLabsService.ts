@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
+// Lily - warm, friendly, natural female voice
+const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku";
 
 let currentAudio: HTMLAudioElement | null = null;
 

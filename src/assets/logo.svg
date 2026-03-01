@@ -1,0 +1,26 @@
+<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Gradient Definition -->
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563EB"></stop>
+      <stop offset="100%" stop-color="#22C55E"></stop>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer Ring -->
+  <circle cx="120" cy="120" r="90" stroke="url(#grad)" stroke-width="14" fill="none"></circle>
+
+  <!-- Geometric Torso (Posture) -->
+  <rect x="100" y="95" width="40" height="70" rx="20" fill="url(#grad)"></rect>
+
+  <!-- Head -->
+  <circle cx="120" cy="75" r="18" fill="url(#grad)"></circle>
+
+  <!-- Speech Bars (abstract waveform) -->
+  <rect x="55" y="110" width="6" height="20" fill="url(#grad)" rx="3"></rect>
+  <rect x="68" y="100" width="6" height="40" fill="url(#grad)" rx="3"></rect>
+  <rect x="81" y="105" width="6" height="30" fill="url(#grad)" rx="3"></rect>
+  <rect x="94" y="115" width="6" height="15" fill="url(#grad)" rx="3"></rect>
+
+</svg>
