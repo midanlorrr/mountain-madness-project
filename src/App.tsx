@@ -59,9 +59,23 @@ export default function App() {
     isRecording: isSpeechRecording, 
     transcript, 
     segments,
+    sttError,
     startRecording: startSpeechRecording, 
     stopRecording: stopSpeechRecording 
   } = useSpeechRecognition(onSessionEnd, handleSentenceEnd);
+
+  const [displayedSttError, setDisplayedSttError] = useState<string | null>(null);
+
+  // Auto-clear STT error banner after 5 seconds
+  React.useEffect(() => {
+    if (sttError) {
+      setDisplayedSttError(sttError);
+      const timer = setTimeout(() => {
+        setDisplayedSttError(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [sttError]);
 
   const {
     isRecording: isVideoRecording,
@@ -447,6 +461,12 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+              {displayedSttError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 animate-in fade-in duration-200">
+                  {displayedSttError}
+                </div>
+              )}
 
               <div className="p-6 bg-gray-50 rounded-2xl min-h-[200px] border border-gray-100 relative overflow-y-auto max-h-[300px]">
                 <p className="label-micro">Session Transcript</p>

@@ -4,146 +4,120 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useScribe } from "@elevenlabs/react";
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { TranscriptSegment } from "../types";
 
 export const FILLER_WORDS = ["um", "uh", "like", "basically", "so"];
 
 export function useSpeechRecognition(onSessionEnd?: () => void, onSentenceEnd?: (sentence: string) => void) {
-  const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   const [fillerWords, setFillerWords] = useState<Record<string, number>>(
     FILLER_WORDS.reduce((acc, word) => ({ ...acc, [word]: 0 }), {})
   );
-
-  const recognitionRef = useRef<any>(null);
-  const isRecordingActiveRef = useRef(false);
+  const [sttError, setSttError] = useState<string | null>(null);
+  
   const transcriptRef = useRef("");
   const startTimeRef = useRef<number>(0);
 
-  const stopRecording = useCallback(() => {
-    isRecordingActiveRef.current = false;
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
-    setIsRecording(false);
+  const scribe = useScribe({
+    modelId: "scribe_v2_realtime",
+    onPartialTranscript: (data) => {
+      // Update in real-time as user speaks
+      const newText = data.text.trim();
+      if (!newText) return;
+      
+      setTranscript(newText);
+      transcriptRef.current = newText;
+    },
+    onCommittedTranscript: (data) => {
+      // Final transcript segment
+      const now = (Date.now() - startTimeRef.current) / 1000;
+      
+      setSegments((prev) => [
+        ...prev,
+        {
+          text: data.text,
+          startTime: Math.max(0, now - 2),
+          endTime: now,
+        },
+      ]);
+
+      if (onSentenceEnd && data.text.length > 5) {
+        onSentenceEnd(data.text);
+      }
+
+      // Check for "end session" command
+      if (transcriptRef.current.toLowerCase().includes("end session")) {
+        scribe.disconnect();
+        if (onSessionEnd) onSessionEnd();
+      }
+    },
+    onError: (error) => {
+      console.error("Scribe error:", error);
+      setSttError("Speech recognition error occurred");
+    },
+  });
+
+  const countFillerWords = useCallback((text: string) => {
+    const words = text.toLowerCase().split(/\s+/).filter(Boolean);
+    const newFillerCounts = FILLER_WORDS.reduce((acc, word) => {
+      const count = words.filter((w) => w === word).length;
+      return { ...acc, [word]: count };
+    }, {} as Record<string, number>);
+    setFillerWords(newFillerCounts);
   }, []);
 
+  // Update filler word counts whenever transcript changes
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      console.warn("Speech recognition not supported in this browser.");
-      return;
+    if (transcript) {
+      countFillerWords(transcript);
     }
+  }, [transcript, countFillerWords]);
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-
-    recognition.onresult = (event: any) => {
-      let interimTranscript = "";
-      let finalTranscript = "";
-      const now = (Date.now() - startTimeRef.current) / 1000;
-
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          const text = result[0].transcript.trim();
-          finalTranscript += text + " ";
-          
-          // Trigger sentence end callback
-          if (onSentenceEnd && text.length > 5) {
-            onSentenceEnd(text);
-          }
-
-          // Add to segments
-          setSegments(prev => [
-            ...prev,
-            {
-              text: text,
-              startTime: Math.max(0, now - 1.2), // Tighter offset for better sync
-              endTime: now
-            }
-          ]);
-        } else {
-          interimTranscript += result[0].transcript;
-        }
+  const startRecording = useCallback(async () => {
+    try {
+      // Generate token client-side (QUICK APPROACH - insecure for production)
+      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
+      if (!apiKey) {
+        setSttError("Missing VITE_ELEVENLABS_API_KEY");
+        return;
       }
 
-      if (finalTranscript) {
-        transcriptRef.current = (transcriptRef.current + " " + finalTranscript).trim();
-      }
+      const client = new ElevenLabsClient({ apiKey });
+      const tokenResponse = await client.tokens.singleUse.create("realtime_scribe");
       
-      const currentDisplayTranscript = (transcriptRef.current + " " + interimTranscript).trim();
-      setTranscript(currentDisplayTranscript);
-
-      // Check for "end session"
-      if (currentDisplayTranscript.toLowerCase().includes("end session")) {
-        stopRecording();
-        if (onSessionEnd) onSessionEnd();
-        return;
-      }
-
-      // Count filler words
-      const words = currentDisplayTranscript.toLowerCase().split(/\s+/);
-      const newFillerCounts = FILLER_WORDS.reduce((acc, word) => {
-        const count = words.filter((w) => w === word).length;
-        return { ...acc, [word]: count };
-      }, {});
-      setFillerWords(newFillerCounts);
-    };
-
-    recognition.onerror = (event: any) => {
-      if (event.error === "no-speech") {
-        console.warn("No speech detected. Continuing...");
-        return;
-      }
-      console.error("Speech recognition error:", event.error);
-      setIsRecording(false);
-    };
-
-    recognition.onend = () => {
-      if (isRecordingActiveRef.current) {
-        try {
-          recognition.start();
-        } catch (e) {
-          console.error("Failed to restart speech recognition:", e);
-        }
-      } else {
-        setIsRecording(false);
-      }
-    };
-
-    recognitionRef.current = recognition;
-
-    return () => {
-      recognition.stop();
-    };
-  }, [stopRecording, onSessionEnd]);
-
-  const startRecording = useCallback(() => {
-    if (recognitionRef.current) {
       setTranscript("");
       transcriptRef.current = "";
       setSegments([]);
-      startTimeRef.current = Date.now();
+      setSttError(null);
       setFillerWords(FILLER_WORDS.reduce((acc, word) => ({ ...acc, [word]: 0 }), {}));
-      isRecordingActiveRef.current = true;
-      try {
-        recognitionRef.current.start();
-        setIsRecording(true);
-      } catch (e) {
-        console.error("Failed to start recognition:", e);
-      }
+      startTimeRef.current = Date.now();
+
+      await scribe.connect({
+        token: tokenResponse.token,
+        microphone: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+    } catch (error) {
+      console.error("Failed to start Scribe session:", error);
+      setSttError("Microphone access denied or unavailable");
     }
-  }, []);
+  }, [scribe]);
+
+  const stopRecording = useCallback(() => {
+    scribe.disconnect();
+  }, [scribe]);
 
   return {
-    isRecording,
+    isRecording: scribe.isConnected,
     transcript,
     segments,
     fillerWords,
+    sttError,
     startRecording,
     stopRecording,
   };
