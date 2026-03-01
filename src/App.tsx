@@ -47,8 +47,18 @@ export default function App() {
   const [isSpeakingPosture, setIsSpeakingPosture] = useState(false);
   const [speechAnalysis, setSpeechAnalysis] = useState<any>(null);
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
+  const [postureStats, setPostureStats] = useState({
+    crossedArms: 0,
+    claspedHands: 0,
+    faceOffCenter: 0,
+    shoulders: 0,
+    chin: 0,
+    noPerson: 0,
+  });
+  const previousPostureIssueRef = useRef<string>("");
+  const analysisIntroPlayedRef = useRef<boolean>(false);
 
-  const { feedback, chinLevel, wristDist, isCrossed, isClasped, analyzePosture } = usePostureTracking();
+  const { feedback, chinLevel, wristDist, isCrossed, isClasped, isFacingForward, analyzePosture } = usePostureTracking();
   
   const onSessionEnd = useCallback(() => {
     setSessionEnded(true);
@@ -82,10 +92,34 @@ export default function App() {
     postureFeedback: feedback.message,
     isCrossed,
     isClasped,
+    isFacingForward,
     onCoachingGenerated: (coaching) => {
       setCoachRecommendations(prev => [...prev, coaching]);
     },
   });
+
+  const identifyPostureIssue = useCallback((message: string) => {
+    const normalized = message.toLowerCase();
+    if (normalized.includes("uncross")) return "crossedArms";
+    if (normalized.includes("clasp")) return "claspedHands";
+    if (normalized.includes("face forward")) return "faceOffCenter";
+    if (normalized.includes("shoulder")) return "shoulders";
+    if (normalized.includes("chin")) return "chin";
+    if (normalized.includes("no person detected")) return "noPerson";
+    if (normalized.includes("good")) return "good";
+    return "other";
+  }, []);
+
+  React.useEffect(() => {
+    if (view === "analysis" && !analysisIntroPlayedRef.current) {
+      analysisIntroPlayedRef.current = true;
+      void speakTextOnce("Here is your speach and posture analysis");
+    }
+
+    if (view !== "analysis") {
+      analysisIntroPlayedRef.current = false;
+    }
+  }, [view]);
 
   const [displayedSttError, setDisplayedSttError] = useState<string | null>(null);
 
@@ -108,6 +142,33 @@ export default function App() {
   } = useVideoRecorder();
 
   const isRecording = isSpeechRecording || isVideoRecording;
+
+  React.useEffect(() => {
+    if (!isRecording) {
+      previousPostureIssueRef.current = "";
+      return;
+    }
+
+    const postureIssue = identifyPostureIssue(feedback.message);
+    if (postureIssue === "good" || postureIssue === "other") {
+      previousPostureIssueRef.current = "";
+      return;
+    }
+
+    if (postureIssue !== previousPostureIssueRef.current) {
+      previousPostureIssueRef.current = postureIssue;
+      setPostureStats((prev) => {
+        if (postureIssue === "crossedArms") return { ...prev, crossedArms: prev.crossedArms + 1 };
+        if (postureIssue === "claspedHands") return { ...prev, claspedHands: prev.claspedHands + 1 };
+        if (postureIssue === "faceOffCenter") return { ...prev, faceOffCenter: prev.faceOffCenter + 1 };
+        if (postureIssue === "shoulders") return { ...prev, shoulders: prev.shoulders + 1 };
+        if (postureIssue === "chin") return { ...prev, chin: prev.chin + 1 };
+        if (postureIssue === "noPerson") return { ...prev, noPerson: prev.noPerson + 1 };
+        return prev;
+      });
+    }
+  }, [isRecording, feedback.message, identifyPostureIssue]);
+
   const [stream, setStream] = useState<MediaStream | null>(null);
   const activeAudioStreamRef = useRef<MediaStream | null>(null);
   const isRecordingRequestedRef = useRef(false);
@@ -167,6 +228,15 @@ export default function App() {
     setSessionEnded(false);
     setLiveFeedback(null);
     setCoachRecommendations([]);
+    setPostureStats({
+      crossedArms: 0,
+      claspedHands: 0,
+      faceOffCenter: 0,
+      shoulders: 0,
+      chin: 0,
+      noPerson: 0,
+    });
+    previousPostureIssueRef.current = "";
     startSpeechRecording();
     
     if (stream) {
@@ -445,12 +515,28 @@ export default function App() {
                   </div>
                 ) : speechAnalysis ? (
                   <div className="space-y-8">
-                    {/* Overall Coaching - Most Prominent */}
-                    <div className="bg-gradient-to-br from-white to-purple-50/30 p-6 rounded-2xl border-2 border-purple-200 shadow-md">
-                      <h3 className="text-lg font-bold text-purple-700 mb-3">✨ Key Takeaway</h3>
-                      <p className="text-base text-gray-800 leading-relaxed">
-                        {speechAnalysis.overallCoaching}
-                      </p>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="bg-white/70 p-6 rounded-2xl border-2 border-purple-200 shadow-md">
+                        <h3 className="text-lg font-bold text-purple-700 mb-3">🗣️ Speech Analysis</h3>
+                        <p className="text-base text-gray-800 leading-relaxed">
+                          {speechAnalysis.overallCoaching}
+                        </p>
+                      </div>
+
+                      <div className="bg-white/70 p-6 rounded-2xl border-2 border-amber-200 shadow-md">
+                        <h3 className="text-lg font-bold text-amber-700 mb-3">🧍 Posture Analysis</h3>
+                        <p className="text-sm text-gray-700 mb-3">
+                          Total posture corrections: {postureStats.crossedArms + postureStats.claspedHands + postureStats.faceOffCenter + postureStats.shoulders + postureStats.chin + postureStats.noPerson}
+                        </p>
+                        <ul className="space-y-1 text-sm text-gray-700">
+                          <li>• Crossed arms: {postureStats.crossedArms}</li>
+                          <li>• Clasped hands: {postureStats.claspedHands}</li>
+                          <li>• Face not forward: {postureStats.faceOffCenter}</li>
+                          <li>• Shoulder alignment: {postureStats.shoulders}</li>
+                          <li>• Chin position: {postureStats.chin}</li>
+                          <li>• Out of frame: {postureStats.noPerson}</li>
+                        </ul>
+                      </div>
                     </div>
 
                     {/* Metrics Grid */}
@@ -674,6 +760,12 @@ export default function App() {
                     <span>Clasped:</span>
                     <span className={isClasped ? 'text-red-400' : 'text-emerald-400'}>
                       {isClasped ? 'YES' : 'NO'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span>Facing:</span>
+                    <span className={isFacingForward ? 'text-emerald-400' : 'text-red-400'}>
+                      {isFacingForward ? 'FORWARD' : 'OFF'}
                     </span>
                   </div>
                   <p className="text-[9px] text-gray-400 italic">Chin Target: {'>'} 0.15</p>

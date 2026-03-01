@@ -16,19 +16,23 @@ interface LiveCoachIntervalProps {
   postureFeedback: string;
   isCrossed: boolean;
   isClasped: boolean;
+  isFacingForward: boolean;
   onCoachingGenerated?: (coaching: string) => void;
 }
 
 /**
- * Hook that generates and speaks real-time coach critique every 5 seconds.
- * Combines filler word analysis + posture red flags + speech patterns into actionable coaching.
- * Warnings are spoken immediately when detected.
+ * Hook that generates and speaks real-time coach critique.
+ * - Posture warnings trigger instantly on posture-state changes.
+ * - Speech coaching runs continuously with richer transcript context.
+ * - Voice playback never overlaps; latest message is queued.
  */
 export function useLiveCoachInterval(props: LiveCoachIntervalProps) {
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSpeakingRef = useRef<boolean>(false);
+  const pendingSpeechRef = useRef<string | null>(null);
   const propsRef = useRef(props);
-  // const givenAdviceRef = useRef<Set<string>>(new Set()); // Commented out - allow repeats
+  const lastPostureIssueRef = useRef<string>("");
+  const lastAnalyzedSentenceCountRef = useRef<number>(0);
+  const lastSpeechAnalysisTimeRef = useRef<number>(0);
 
   // Keep props ref updated without causing effect re-runs
   useEffect(() => {
@@ -40,186 +44,192 @@ export function useLiveCoachInterval(props: LiveCoachIntervalProps) {
     props.postureFeedback,
     props.isCrossed,
     props.isClasped,
+    props.isFacingForward,
+    props.onCoachingGenerated,
   ]);
 
-  useEffect(() => {
-    console.log("📋 Coach interval effect:", { isRecording: props.isRecording });
+  const speakNonOverlapping = async (message: string) => {
+    const trimmed = message.trim();
+    if (!trimmed) return;
 
-    if (!props.isRecording) {
-      // Clear interval when not recording
-      if (intervalRef.current) {
-        console.log("🛑 Stopping critique loop");
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      // givenAdviceRef.current.clear(); // Commented out - allow repeats
+    if (isSpeakingRef.current) {
+      pendingSpeechRef.current = trimmed;
       return;
     }
 
-    console.log("▶️  Starting 5-second critique loop...");
+    isSpeakingRef.current = true;
+    try {
+      await speakTextOnce(trimmed);
+    } catch (error) {
+      console.error("❌ Failed to speak coaching:", error);
+    } finally {
+      isSpeakingRef.current = false;
 
-    const generateCritique = async () => {
+      if (pendingSpeechRef.current) {
+        const queued = pendingSpeechRef.current;
+        pendingSpeechRef.current = null;
+        void speakNonOverlapping(queued);
+      }
+    }
+  };
+
+  const detectPostureIssue = (current: LiveCoachIntervalProps) => {
+    if (current.isCrossed) {
+      return {
+        key: "crossed-arms",
+        voice: "Open your arms.",
+      };
+    }
+
+    if (current.isClasped) {
+      return {
+        key: "clasped-hands",
+        voice: "Relax your hands.",
+      };
+    }
+
+    if (!current.isFacingForward) {
+      return {
+        key: "face-off-center",
+        voice: "Face forward.",
+      };
+    }
+
+    if (current.postureFeedback && !current.postureFeedback.toLowerCase().includes("good")) {
+      return {
+        key: "posture-feedback",
+        voice: current.postureFeedback,
+      };
+    }
+
+    return null;
+  };
+
+  useEffect(() => {
+    if (!props.isRecording) {
+      lastPostureIssueRef.current = "";
+      pendingSpeechRef.current = null;
+      return;
+    }
+
+    const current = propsRef.current;
+    const postureIssue = detectPostureIssue(current);
+    const postureKey = postureIssue?.key ?? "";
+
+    if (postureKey && postureKey !== lastPostureIssueRef.current) {
+      lastPostureIssueRef.current = postureKey;
+      if (current.onCoachingGenerated) {
+        current.onCoachingGenerated(postureIssue!.voice);
+      }
+      void speakNonOverlapping(postureIssue!.voice);
+    }
+
+    if (!postureKey) {
+      lastPostureIssueRef.current = "";
+    }
+  }, [
+    props.isRecording,
+    props.isCrossed,
+    props.isClasped,
+    props.isFacingForward,
+    props.postureFeedback,
+  ]);
+
+  useEffect(() => {
+    if (!props.isRecording) {
+      lastAnalyzedSentenceCountRef.current = 0;
+      return;
+    }
+
+    const generateSpeechCritique = async () => {
       const current = propsRef.current;
+      if (!current.transcript) return;
 
-      console.log("🔍 Critique check:", {
-        hasTranscript: !!current.transcript,
-        isSpeaking: isSpeakingRef.current,
-        transcript: current.transcript?.slice(0, 50),
-      });
-
-      if (!current.transcript || isSpeakingRef.current) {
-        console.log("⏭️  Skipping critique: no transcript or already speaking");
+      const now = Date.now();
+      if (now - lastSpeechAnalysisTimeRef.current < 3000) {
         return;
       }
 
+      const sentences = current.transcript
+        .split(/[.!?]+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+
+      if (sentences.length === 0) return;
+
+      const recentSentences = sentences.length >= 3
+        ? sentences.slice(-3).join(". ")
+        : sentences.join(". ");
+
+      if (sentences.length === lastAnalyzedSentenceCountRef.current && sentences.length >= 3) {
+        return;
+      }
+
+      lastSpeechAnalysisTimeRef.current = now;
+
+      lastAnalyzedSentenceCountRef.current = sentences.length;
+
+      const lastSentence = sentences[sentences.length - 1] ?? "";
+      const lastSentenceWordCount = lastSentence.split(/\s+/).filter(Boolean).length;
+      const averageSentenceLength = sentences.reduce(
+        (sum, sentence) => sum + sentence.split(/\s+/).filter(Boolean).length,
+        0,
+      ) / sentences.length;
+
+      const totalFillers = Object.values(current.fillerWords).reduce<number>(
+        (sum, count) => sum + Number(count),
+        0,
+      );
+
+      const speechSignal = {
+        totalSentences: sentences.length,
+        lastSentenceWordCount,
+        averageSentenceLength: Number(averageSentenceLength.toFixed(1)),
+        totalFillers,
+      };
+
+      const likelyIssue =
+        totalFillers > 3
+          ? "filler_words"
+          : averageSentenceLength > 20
+            ? "beating_around_the_bush"
+            : lastSentenceWordCount > 25
+              ? "too_long_sentence"
+              : "general_flow";
+
       try {
-        isSpeakingRef.current = true;
+        const critiquePrompt = `You are a warm speech coach giving live feedback.
 
-        // Extract last 3 sentences (or all if less than 3)
-        const sentences = current.transcript.split(/[.!?]+/).filter(s => s.trim().length > 0);
-        const recentSentences = sentences.slice(-3).join('. ');
-        const sentenceCount = sentences.length;
-        
-        console.log("📝 Analyzing sentences:", { total: sentenceCount, recent: recentSentences.slice(0, 100) });
+Recent speech sample:
+"${recentSentences}"
 
-        // Analyze fillers in recent speech
-        const fillerCounts = Object.entries(current.fillerWords)
-          .filter(([_, count]) => (count as number) > 0)
-          .map(([word, count]) => `${count} ${word}${(count as number) > 1 ? "s" : ""}`)
-          .join(", ");
+Signal metrics:
+${JSON.stringify(speechSignal)}
 
-        // Analyze speech patterns
-        const lastSentence = sentences[sentences.length - 1] || "";
-        const wordCount = lastSentence.split(/\s+/).length;
-        const avgSentenceLength = sentences.length > 0 
-          ? sentences.reduce((sum, s) => sum + s.split(/\s+/).length, 0) / sentences.length 
-          : 0;
-        
-        const isTooVerbose = wordCount > 25; // Sentence is very long
-        const isBeatingAroundBush = avgSentenceLength > 20; // Average sentence is long
-        const totalFillers = Object.values(current.fillerWords).reduce((a, b) => (a as number) + (b as number), 0) as number;
-        const hasExcessiveFillers = totalFillers > 3;
+Likely issue:
+${likelyIssue}
 
-        // Build posture red flags
-        const postureIssues = [];
-        if (current.isCrossed) postureIssues.push("hands crossed");
-        if (current.isClasped) postureIssues.push("hands clasped");
-        if (
-          current.postureFeedback &&
-          !current.postureFeedback.toLowerCase().includes("good")
-        ) {
-          postureIssues.push(current.postureFeedback.toLowerCase());
-        }
+Give one gentle and concise coaching line (no strict word limit, but keep it short and natural like a real coach).
+Do not mention numbers. Give an actionable suggestion.`;
 
-        console.log("📊 Detected issues:", { 
-          fillerCounts, 
-          postureIssues, 
-          isTooVerbose, 
-          isBeatingAroundBush,
-          hasExcessiveFillers,
-          avgSentenceLength 
-        });
-
-        // Prioritize issues: Posture > Speech patterns > Fillers
-        let focusIssue = "";
-        let twoWordSummary = ""; // Two-word summary to speak
-        
-        if (postureIssues.length > 0) {
-          // Posture is most important
-          const issue = postureIssues[0];
-          focusIssue = `Posture: ${issue}`;
-          
-          // Generate two-word summary based on posture issue
-          if (issue.includes("crossed")) {
-            twoWordSummary = "Crossed Arms";
-          } else if (issue.includes("clasped")) {
-            twoWordSummary = "Clasped Hands";
-          } else if (issue.includes("shoulder")) {
-            twoWordSummary = "Fix Posture";
-          } else if (issue.includes("neck") || issue.includes("chin")) {
-            twoWordSummary = "Neck Position";
-          } else {
-            twoWordSummary = "Fix Posture";
-          }
-        } else if (isTooVerbose) {
-          focusIssue = `Speech: Last sentence was ${wordCount} words - too verbose. Recent: "${recentSentences}"`;
-          twoWordSummary = "Too Verbose";
-        } else if (isBeatingAroundBush) {
-          focusIssue = `Speech: Average sentence length is ${avgSentenceLength.toFixed(0)} words - beating around the bush. Recent: "${recentSentences}"`;
-          twoWordSummary = "Be Concise";
-        } else if (hasExcessiveFillers) {
-          focusIssue = `Speech: Excessive filler words detected - ${fillerCounts}. Recent: "${recentSentences}"`;
-          twoWordSummary = "Filler Words";
-        } else if (fillerCounts) {
-          // Regular fillers
-          focusIssue = `Speech: ${fillerCounts}. Recent: "${recentSentences}"`;
-          twoWordSummary = "Filler Words";
-        } else {
-          // No issues detected
-          console.log("✅ No issues detected, skipping critique");
-          isSpeakingRef.current = false;
-          return;
-        }
-        
-        // Commented out: Skip if we've already given this advice (allow repeats now)
-        // if (givenAdviceRef.current.has(issueKey)) {
-        //   console.log("⏭️  Already gave advice for:", issueKey);
-        //   isSpeakingRef.current = false;
-        //   return;
-        // }
-
-        // Build critique prompt - focus on ONE thing
-        const critiquePrompt = `You are a warm, supportive speech coach. The issue to address is: ${focusIssue}.
-
-Give ONE gentle, specific instruction (max 8 words). Be kind yet clear about what to do.
-
-Examples:
-- "Open your arms to look confident"
-- "Unclasp hands, try gesturing naturally"
-- "Straighten your shoulders and lift chin"
-- "Try pausing instead of saying like"
-- "Get to the point more directly"
-- "Shorten your sentences for clarity"
-
-Your response (max 8 words):`;  
-
-        console.log("🎯 Sending to Gemini...");
         const response = await ai.models.generateContent({
           model: "gemini-2.5-flash",
           contents: critiquePrompt,
         });
 
         const critique = response.text.trim();
-        console.log("✅ Got critique:", critique);
+        if (!critique) return;
 
-        // givenAdviceRef.current.add(issueKey); // Commented out - allow repeats
-        
-        // Call callback to add full coaching tip to recommendations log
-        if (propsRef.current.onCoachingGenerated) {
-          propsRef.current.onCoachingGenerated(critique);
+        if (current.onCoachingGenerated) {
+          current.onCoachingGenerated(critique);
         }
-        
-        // Speak two-word summary immediately (no queue)
-        console.log("🔊 Speaking immediately:", twoWordSummary);
-        await speakTextOnce(twoWordSummary);
-        console.log("✅ Finished speaking");
+
+        void speakNonOverlapping(critique);
       } catch (error) {
-        console.error("❌ Failed to generate critique:", error);
-      } finally {
-        isSpeakingRef.current = false;
+        console.error("❌ Failed to generate speech critique:", error);
       }
     };
 
-    // Start 5-second critique loop
-    intervalRef.current = setInterval(() => {
-      console.log("⏰ 5-second interval fired");
-      generateCritique();
-    }, 5000);
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [props.isRecording]);
+    void generateSpeechCritique();
+  }, [props.isRecording, props.transcript, props.fillerWords]);
 }

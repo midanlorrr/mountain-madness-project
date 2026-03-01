@@ -15,6 +15,7 @@ export function usePostureTracking() {
   const [wristDist, setWristDist] = useState<number>(0);
   const [isCrossed, setIsCrossed] = useState<boolean>(false);
   const [isClasped, setIsClasped] = useState<boolean>(false);
+  const [isFacingForward, setIsFacingForward] = useState<boolean>(true);
 
   const analyzePosture = useCallback((results: any) => {
     if (!results.poseLandmarks) {
@@ -44,9 +45,15 @@ export function usePostureTracking() {
 
     // 2. Head Tilt / Chin Position
     const shoulderMidY = (leftShoulder.y + rightShoulder.y) / 2;
+    const shoulderMidX = (leftShoulder.x + rightShoulder.x) / 2;
     const currentChinLevel = shoulderMidY - nose.y;
     setChinLevel(currentChinLevel);
     const isChinUp = currentChinLevel > 0.15;
+
+    // 2b. Face Forward Detection (nose near shoulder midpoint)
+    const faceOffset = Math.abs(nose.x - shoulderMidX);
+    const currentIsFacingForward = faceOffset < 0.03;
+    setIsFacingForward(currentIsFacingForward);
 
     // 3. Clasped Hands Detection
     // If wrists are very close together
@@ -65,15 +72,17 @@ export function usePostureTracking() {
     setIsCrossed(currentIsCrossed);
 
     if (currentIsCrossed) {
-      setFeedback({ message: "Uncross your arms for a more open posture", isGood: false });
+      setFeedback({ message: "Open your arms.", isGood: false });
     } else if (currentIsClasped) {
-      setFeedback({ message: "Avoid clasping your hands; keep them visible and relaxed", isGood: false });
+      setFeedback({ message: "Relax your hands.", isGood: false });
+    } else if (!currentIsFacingForward) {
+      setFeedback({ message: "Face forward.", isGood: false });
     } else if (!isShouldersLevel) {
-      setFeedback({ message: "Straighten shoulders", isGood: false });
+      setFeedback({ message: "Straighten shoulders.", isGood: false });
     } else if (!isChinUp) {
-      setFeedback({ message: "Lift chin", isGood: false });
+      setFeedback({ message: "Lift chin.", isGood: false });
     } else {
-      setFeedback({ message: "Good posture", isGood: true });
+      setFeedback({ message: "Good posture.", isGood: true });
     }
   }, []);
 
@@ -83,6 +92,7 @@ export function usePostureTracking() {
     wristDist,
     isCrossed,
     isClasped,
+    isFacingForward,
     analyzePosture,
   };
 }
