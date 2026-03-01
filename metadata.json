@@ -1,6 +1,6 @@
 {
-  "name": "StandTall",
-  "description": "A real-time posture and speech coach using MediaPipe Pose and Web Speech API.",
+  "name": "StageSense",
+  "description": "A real-time posture and speech coach using Google Gemini, MediaPipe Pose, and ElevenLabs API.",
   "requestFramePermissions": [
     "camera",
     "microphone"

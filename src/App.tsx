@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useCallback, useMemo, useRef } from "react";
+import { motion } from "motion/react";
 import { WebcamFeed } from "./components/WebcamFeed";
 import { LandingPage } from "./components/LandingPage";
 import { usePostureTracking } from "./hooks/usePostureTracking";
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 import { useVideoRecorder } from "./hooks/useVideoRecorder";
 import { useLiveCoachInterval } from "./hooks/useLiveCoachInterval";
-import { getLiveFeedback } from "./services/geminiService";
+import { getLiveFeedback, getComprehensiveSpeechAnalysis } from "./services/geminiService";
 import { speakTextOnce } from "./services/elevenLabsService";
 import { 
   Camera, 
@@ -43,6 +44,8 @@ export default function App() {
   const [coachRecommendations, setCoachRecommendations] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSpeakingPosture, setIsSpeakingPosture] = useState(false);
+  const [speechAnalysis, setSpeechAnalysis] = useState<any>(null);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
 
   const { feedback, chinLevel, wristDist, isCrossed, isClasped, analyzePosture } = usePostureTracking();
   
@@ -120,8 +123,14 @@ export default function App() {
 
   const handleStartAnalysis = useCallback(() => {
     if (!transcript) return;
+    setIsLoadingAnalysis(true);
+    // Call Gemini for analysis
+    getComprehensiveSpeechAnalysis(transcript, fillerWords).then((analysis) => {
+      setSpeechAnalysis(analysis);
+      setIsLoadingAnalysis(false);
+    });
     setView("analysis");
-  }, [transcript]);
+  }, [transcript, fillerWords]);
 
   const handleReadPosture = useCallback(async () => {
     const message = cameraEnabled ? feedback.message : "Camera is disabled. Enable camera for posture feedback.";
@@ -206,30 +215,24 @@ export default function App() {
   }, [transcript]);
 
   const synchronizedTranscript = useMemo(() => {
-    if (segments.length === 0) return highlightedTranscript;
-
-    return segments.map((segment, i) => {
-      const isActive = i === activeSegmentIndex;
-      const words = segment.text.split(/(\s+)/);
-      const fillerWordsList = ["um", "uh", "like", "basically", "so"];
-      
-      return (
-        <span 
-          key={i} 
-          className={`transition-all duration-200 ${isActive ? 'bg-indigo-100 text-indigo-900 font-bold px-1 rounded ring-2 ring-indigo-200' : 'opacity-60'}`}
-        >
-          {words.map((word, j) => {
-            const cleanWord = word.toLowerCase().trim();
-            if (fillerWordsList.includes(cleanWord)) {
-              return <span key={j} className="text-red-500 underline decoration-red-300">{word}</span>;
-            }
-            return <span key={j}>{word}</span>;
-          })}
-          {" "}
-        </span>
-      );
-    });
-  }, [segments, activeSegmentIndex, highlightedTranscript]);
+    if (!transcript) return null;
+    
+    // Use full transcript directly for better accuracy with ElevenLabs STT
+    const words = transcript.split(/\s+/);
+    const fillerWordsList = ["um", "uh", "like", "basically", "so"];
+    
+    return (
+      <div className="space-y-1 leading-relaxed">
+        {words.map((word, i) => {
+          const cleanWord = word.toLowerCase().replace(/[^a-z]/g, "");
+          if (fillerWordsList.includes(cleanWord)) {
+            return <span key={i} className="text-red-500 font-bold underline decoration-red-300 mx-1">{word}</span>;
+          }
+          return <span key={i} className="mx-1">{word}</span>;
+        })}
+      </div>
+    );
+  }, [transcript]);
 
   // Mission Header Component (reusable)
   const MissionHeader = () => (
@@ -282,63 +285,231 @@ export default function App() {
             </div>
           </header>
 
-          <main className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
-            {/* Left Side: Video Playback */}
-            <section className="card-base p-6 flex flex-col h-[calc(100vh-200px)] border-2 border-blue-100 shadow-lg shadow-blue-100/50">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <Play className="w-5 h-5 text-blue-600" />
-                <span className="bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent">Session Recording</span>
-              </h2>
-              <div className="flex-grow bg-gray-900 rounded-2xl overflow-hidden flex items-center justify-center">
-                {videoUrl ? (
-                  <video 
-                    src={videoUrl} 
-                    controls 
-                    className="w-full h-full object-contain"
-                    onTimeUpdate={(e) => setCurrentVideoTime((e.target as HTMLVideoElement).currentTime)}
-                  />
+          <main className="space-y-8 max-w-7xl mx-auto">
+            {/* Top Row: Video and Transcript */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left Side: Video Playback */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0 }}
+              >
+                <section className="card-base p-6 flex flex-col h-[calc(100vh-200px)] border-2 border-blue-100 shadow-lg shadow-blue-100/50">
+                  <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <Play className="w-5 h-5 text-blue-600" />
+                    <span className="bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent">Session Recording</span>
+                  </h2>
+                  <div className="flex-grow bg-gray-900 rounded-2xl overflow-hidden flex items-center justify-center">
+                    {videoUrl ? (
+                      <video 
+                        src={videoUrl} 
+                        controls 
+                        className="w-full h-full object-contain"
+                        onTimeUpdate={(e) => setCurrentVideoTime((e.target as HTMLVideoElement).currentTime)}
+                      />
+                    ) : (
+                      <div className="text-center space-y-2">
+                        <Loader2 className="w-8 h-8 text-gray-600 animate-spin mx-auto" />
+                        <p className="text-gray-500">Processing video...</p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </motion.div>
+
+              {/* Right Side: Synchronized Transcript */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.1 }}
+              >
+                <section className="card-base p-6 flex flex-col h-[calc(100vh-200px)] border-2 border-emerald-100 shadow-lg shadow-emerald-100/50">
+                  <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <Mic className="w-5 h-5 text-emerald-600" />
+                    <span className="bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">Transcript</span>
+                  </h2>
+                  <div className="flex-grow p-6 bg-gradient-to-br from-emerald-50/30 to-blue-50/30 rounded-2xl border-2 border-emerald-100 overflow-y-auto custom-scrollbar">
+                    <div className="text-base text-gray-800 leading-relaxed whitespace-normal break-words">
+                      {synchronizedTranscript}
+                    </div>
+                  </div>
+                  
+                  <h2 className="text-lg font-semibold mt-4 mb-2 flex items-center gap-2 text-sm">
+                    <Heart className="w-4 h-4 text-emerald-600" />
+                    <span className="bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">Live Coaching</span>
+                  </h2>
+                  <div className="h-32 p-3 bg-gradient-to-br from-blue-50/50 to-emerald-50/50 rounded-xl border-2 border-blue-100 overflow-y-auto custom-scrollbar text-sm">
+                    {coachRecommendations.length > 0 ? (
+                      <ul className="space-y-2">
+                        {coachRecommendations.slice(-3).map((rec, i) => (
+                          <li key={i} className="text-xs text-gray-700 leading-snug">
+                            • {rec}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-gray-400 text-xs italic">Coaching will appear here.</p>
+                    )}
+                  </div>
+                </section>
+              </motion.div>
+            </div>
+
+            {/* Bottom: Full-width AI Analysis */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+            >
+              <section className="card-base p-8 flex flex-col border-2 border-purple-100 shadow-lg shadow-purple-100/50 bg-gradient-to-br from-purple-50/20 to-pink-50/20">
+                <h2 className="text-2xl font-bold flex items-center gap-3 mb-3">
+                  <Brain className="w-6 h-6 text-purple-600" />
+                  <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">AI Analysis</span>
+                </h2>
+                
+                {/* Scroll Indicator - More prominent at top */}
+                {!isLoadingAnalysis && speechAnalysis && (
+                  <motion.div
+                    animate={{ y: [0, 5, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                    className="text-center py-3 mb-4 bg-purple-100/50 rounded-xl border-2 border-purple-200"
+                  >
+                    <span className="text-purple-700 text-lg font-bold">↓ Scroll down for detailed breakdown ↓</span>
+                  </motion.div>
+                )}
+                
+                {isLoadingAnalysis ? (
+                  <div className="flex-grow flex items-center justify-center py-20">
+                    <div className="text-center">
+                      <Loader2 className="w-10 h-10 text-purple-600 animate-spin mx-auto mb-3" />
+                      <p className="text-base text-gray-600">Analyzing your speech...</p>
+                    </div>
+                  </div>
+                ) : speechAnalysis ? (
+                  <div className="space-y-8">
+                    {/* Overall Coaching - Most Prominent */}
+                    <div className="bg-gradient-to-br from-white to-purple-50/30 p-6 rounded-2xl border-2 border-purple-200 shadow-md">
+                      <h3 className="text-lg font-bold text-purple-700 mb-3">✨ Key Takeaway</h3>
+                      <p className="text-base text-gray-800 leading-relaxed">
+                        {speechAnalysis.overallCoaching}
+                      </p>
+                    </div>
+
+                    {/* Metrics Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Strengths */}
+                      <div className="bg-white/50 p-5 rounded-xl border-2 border-emerald-100">
+                        <h3 className="text-lg font-bold text-emerald-700 mb-4 flex items-center gap-2">
+                          <span>💪</span> What You Did Well
+                        </h3>
+                        <ul className="space-y-2 text-sm text-gray-700">
+                          {speechAnalysis.strengths?.slice(0, 3).map((s: string, i: number) => (
+                            <li key={i} className="leading-relaxed">✓ {s}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Improvement Areas */}
+                      <div className="bg-white/50 p-5 rounded-xl border-2 border-amber-100">
+                        <h3 className="text-lg font-bold text-amber-700 mb-4 flex items-center gap-2">
+                          <span>🎯</span> Growth Opportunities
+                        </h3>
+                        <ul className="space-y-2 text-sm text-gray-700">
+                          {speechAnalysis.improvementAreas?.slice(0, 3).map((a: string, i: number) => (
+                            <li key={i} className="leading-relaxed">→ {a}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Pacing */}
+                      <div className="bg-white/50 p-5 rounded-xl border-2 border-blue-100">
+                        <h3 className="text-lg font-bold text-blue-700 mb-3 flex items-center gap-2">
+                          <span>⏰</span> Pacing
+                        </h3>
+                        <p className="text-sm text-gray-700 leading-relaxed">{speechAnalysis.pacing}</p>
+                      </div>
+
+                      {/* Clarity */}
+                      <div className="bg-white/50 p-5 rounded-xl border-2 border-cyan-100">
+                        <h3 className="text-lg font-bold text-cyan-700 mb-3 flex items-center gap-2">
+                          <span>📢</span> Clarity
+                        </h3>
+                        <p className="text-sm text-gray-700 leading-relaxed">{speechAnalysis.clarity}</p>
+                      </div>
+                    </div>
+
+                    {/* Detailed Transcript Breakdown */}
+                    <div className="bg-white/70 p-6 rounded-2xl border-2 border-indigo-200 shadow-md">
+                      <h3 className="text-xl font-bold text-indigo-700 mb-4 flex items-center gap-2">
+                        <span>🔍</span> Detailed Breakdown
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-4 italic">
+                        Your speech analyzed sentence by sentence. <span className="text-red-500 font-semibold">Red highlights</span> show filler words, 
+                        <span className="text-emerald-600 font-semibold"> green annotations</span> show strengths, 
+                        <span className="text-amber-600 font-semibold"> orange notes</span> suggest improvements.
+                      </p>
+                      
+                      <div className="space-y-4 max-h-[600px] overflow-y-auto custom-scrollbar">
+                        {transcript.split(/[.!?]+/).filter(s => s.trim()).map((sentence, idx) => {
+                          const words = sentence.trim().split(/\s+/);
+                          const fillerWordsList = ["um", "uh", "like", "basically", "so"];
+                          const sentenceFillers = words.filter(w => 
+                            fillerWordsList.includes(w.toLowerCase().replace(/[^a-z]/g, ""))
+                          ).length;
+                          
+                          // Determine feedback based on patterns
+                          const hasMultipleFillers = sentenceFillers > 1;
+                          const isLongSentence = words.length > 20;
+                          const isShortAndClear = words.length < 15 && sentenceFillers === 0;
+                          
+                          return (
+                            <div key={idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                              <div className="text-base text-gray-800 leading-relaxed mb-2">
+                                {words.map((word, i) => {
+                                  const cleanWord = word.toLowerCase().replace(/[^a-z]/g, "");
+                                  if (fillerWordsList.includes(cleanWord)) {
+                                    return <span key={i} className="text-red-500 font-bold bg-red-50 px-1 rounded mx-0.5">{word}</span>;
+                                  }
+                                  return <span key={i} className="mx-0.5">{word}</span>;
+                                })}.
+                              </div>
+                              
+                              {/* Inline annotations */}
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {isShortAndClear && (
+                                  <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full border border-emerald-200">
+                                    ✓ Clear and concise
+                                  </span>
+                                )}
+                                {hasMultipleFillers && (
+                                  <span className="text-xs bg-amber-50 text-amber-700 px-2 py-1 rounded-full border border-amber-200">
+                                    ⚠ Multiple fillers - try pausing instead
+                                  </span>
+                                )}
+                                {isLongSentence && (
+                                  <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full border border-blue-200">
+                                    💡 Long sentence - consider breaking it up
+                                  </span>
+                                )}
+                                {!isShortAndClear && !hasMultipleFillers && !isLongSentence && sentenceFillers === 0 && (
+                                  <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full border border-emerald-200">
+                                    ✓ Good delivery
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 ) : (
-                  <div className="text-center space-y-2">
-                    <Loader2 className="w-8 h-8 text-gray-600 animate-spin mx-auto" />
-                    <p className="text-gray-500">Processing video...</p>
+                  <div className="flex-grow flex items-center justify-center py-20">
+                    <p className="text-gray-400 text-center text-base">Analysis will appear here when you view the session.</p>
                   </div>
                 )}
-              </div>
-            </section>
-
-            {/* Right Side: Synchronized Transcript */}
-            <section className="card-base p-6 flex flex-col h-[calc(100vh-200px)] border-2 border-emerald-100 shadow-lg shadow-emerald-100/50">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <Mic className="w-5 h-5 text-emerald-600" />
-                <span className="bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">Synchronized Transcript</span>
-              </h2>
-              <div className="flex-grow p-6 bg-gradient-to-br from-emerald-50/30 to-blue-50/30 rounded-2xl border-2 border-emerald-100 overflow-y-auto custom-scrollbar mb-6">
-                <div className="text-lg text-gray-800 leading-relaxed">
-                  {synchronizedTranscript}
-                </div>
-              </div>
-
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <Heart className="w-5 h-5 text-emerald-600" />
-                <span className="bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">Supportive Coaching Log</span>
-              </h2>
-              <div className="h-48 p-4 bg-gradient-to-br from-blue-50/50 to-emerald-50/50 rounded-2xl border-2 border-blue-100 overflow-y-auto custom-scrollbar">
-                {coachRecommendations.length > 0 ? (
-                  <ul className="space-y-3">
-                    {coachRecommendations.map((rec, i) => (
-                      <li key={i} className="flex gap-3 text-sm text-gray-700">
-                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-100 to-blue-100 flex items-center justify-center shrink-0 mt-0.5">
-                          <span className="text-[10px] font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">{i + 1}</span>
-                        </div>
-                        <p>{rec}</p>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-gray-400 text-sm italic text-center py-8">No recommendations logged during this session.</p>
-                )}
-              </div>
-            </section>
+              </section>
+            </motion.div>
           </main>
         </div>
         <Footer />
@@ -360,7 +531,7 @@ export default function App() {
               <ArrowLeft className="w-6 h-6 text-emerald-600" />
             </button>
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">StandTall AI</h1>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">StageSense</h1>
               <p className="text-gray-600 text-sm">Your compassionate real-time coach for posture and speech.</p>
             </div>
           </div>

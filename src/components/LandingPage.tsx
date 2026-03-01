@@ -24,7 +24,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
-        className="max-w-4xl w-full text-center space-y-8 mt-20"
+        className="max-w-4xl w-full text-center space-y-8 mt-20 pb-12"
       >
         <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-none mb-6 pt-8">
           <span className="bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">StageSense</span> <br />
