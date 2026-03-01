@@ -15,7 +15,7 @@ export async function getLiveFeedback(sentence: string) {
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: `You are a speech coach. Analyze this sentence for vocal variety, pacing, and clarity. Provide a single, concise sentence of advice (max 15 words) that is encouraging and actionable. Sentence: "${sentence}"`,
       config: {
         systemInstruction: "You are a world-class public speaking coach. Your feedback is always brief, professional, and focuses on immediate improvement.",

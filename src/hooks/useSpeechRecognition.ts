@@ -18,38 +18,68 @@ export function useSpeechRecognition(onSessionEnd?: () => void, onSentenceEnd?: 
   );
   const [sttError, setSttError] = useState<string | null>(null);
   
-  const transcriptRef = useRef("");
+  const fullTranscriptRef = useRef("");
   const startTimeRef = useRef<number>(0);
 
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     onPartialTranscript: (data) => {
-      // Update in real-time as user speaks
-      const newText = data.text.trim();
-      if (!newText) return;
+      // Show real-time partial transcript combined with committed text
+      const partialText = data.text.trim();
+      if (!partialText) return;
       
-      setTranscript(newText);
-      transcriptRef.current = newText;
+      // Combine full committed transcript + current partial
+      const combinedText = fullTranscriptRef.current 
+        ? `${fullTranscriptRef.current} ${partialText}` 
+        : partialText;
+      
+      setTranscript(combinedText);
     },
     onCommittedTranscript: (data) => {
-      // Final transcript segment
+      // Append to full transcript permanently
+      const committedText = data.text.trim();
+      if (!committedText) return;
+
+      fullTranscriptRef.current = fullTranscriptRef.current 
+        ? `${fullTranscriptRef.current} ${committedText}` 
+        : committedText;
+      
+      setTranscript(fullTranscriptRef.current);
+
       const now = (Date.now() - startTimeRef.current) / 1000;
       
       setSegments((prev) => [
         ...prev,
         {
-          text: data.text,
+          text: committedText,
           startTime: Math.max(0, now - 2),
           endTime: now,
         },
       ]);
 
-      if (onSentenceEnd && data.text.length > 5) {
-        onSentenceEnd(data.text);
+      if (onSentenceEnd && committedText.length > 5) {
+        onSentenceEnd(committedText);
       }
 
-      // Check for "end session" command
-      if (transcriptRef.current.toLowerCase().includes("end session")) {
+      // Check for "end session" command variations in committed text or full transcript
+      const fullText = fullTranscriptRef.current.toLowerCase();
+      const committedLower = committedText.toLowerCase();
+      console.log("🔍 Checking for 'end session':", { 
+        committedText, 
+        committedLower,
+        fullText: fullText.slice(-100) 
+      });
+      
+      // Check multiple variations
+      const endPhrases = ["end session", "and session", "in session", "end the session", "stop session"];
+      const hasEndCommand = endPhrases.some(phrase => 
+        committedLower.includes(phrase) || fullText.includes(phrase)
+      );
+      
+      if (hasEndCommand) {
+        console.log("🛑 'End session' command detected! Stopping recording...");
+        console.log("🛑 Committed:", committedText);
+        console.log("🛑 Full transcript:", fullTranscriptRef.current);
         scribe.disconnect();
         if (onSessionEnd) onSessionEnd();
       }
@@ -89,7 +119,7 @@ export function useSpeechRecognition(onSessionEnd?: () => void, onSentenceEnd?: 
       const tokenResponse = await client.tokens.singleUse.create("realtime_scribe");
       
       setTranscript("");
-      transcriptRef.current = "";
+      fullTranscriptRef.current = "";
       setSegments([]);
       setSttError(null);
       setFillerWords(FILLER_WORDS.reduce((acc, word) => ({ ...acc, [word]: 0 }), {}));

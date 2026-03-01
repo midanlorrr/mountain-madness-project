@@ -9,6 +9,7 @@ import { LandingPage } from "./components/LandingPage";
 import { usePostureTracking } from "./hooks/usePostureTracking";
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 import { useVideoRecorder } from "./hooks/useVideoRecorder";
+import { useLiveCoachInterval } from "./hooks/useLiveCoachInterval";
 import { getLiveFeedback } from "./services/geminiService";
 import { speakTextOnce } from "./services/elevenLabsService";
 import { 
@@ -57,12 +58,23 @@ export default function App() {
 
   const { 
     isRecording: isSpeechRecording, 
-    transcript, 
+    transcript,
+    fillerWords,
     segments,
     sttError,
     startRecording: startSpeechRecording, 
     stopRecording: stopSpeechRecording 
   } = useSpeechRecognition(onSessionEnd, handleSentenceEnd);
+
+  // Activate 5-second live coach critique
+  useLiveCoachInterval({
+    isRecording: isSpeechRecording,
+    transcript,
+    fillerWords,
+    postureFeedback: feedback.message,
+    isCrossed,
+    isClasped,
+  });
 
   const [displayedSttError, setDisplayedSttError] = useState<string | null>(null);
 
@@ -322,6 +334,14 @@ export default function App() {
             <Zap className="w-5 h-5" />
           </button>
           <button
+            onClick={handleReadPosture}
+            disabled={isSpeakingPosture}
+            className={`btn-icon ${isSpeakingPosture ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-400'}`}
+            title="Test ElevenLabs TTS (Read Posture)"
+          >
+            {isSpeakingPosture ? <Loader2 className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
+          </button>
+          <button
             onClick={() => setCameraEnabled(!cameraEnabled)}
             className={`btn-icon ${cameraEnabled ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}
             title={cameraEnabled ? "Turn Camera Off" : "Turn Camera On"}
@@ -395,23 +415,6 @@ export default function App() {
             <div className={`feedback-banner ${feedback.isGood ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
               {cameraEnabled ? feedback.message : "Enable camera for posture feedback"}
             </div>
-            <button
-              onClick={handleReadPosture}
-              disabled={isSpeakingPosture}
-              className="mt-3 w-full btn-secondary flex items-center justify-center gap-2"
-            >
-              {isSpeakingPosture ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Reading posture...
-                </>
-              ) : (
-                <>
-                  <Volume2 className="w-4 h-4" />
-                  Read posture once
-                </>
-              )}
-            </button>
           </div>
         </section>
 
