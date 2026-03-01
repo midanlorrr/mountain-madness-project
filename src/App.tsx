@@ -26,7 +26,11 @@ import {
   Terminal,
   Loader2,
   CheckCircle2,
-  Volume2
+  Volume2,
+  Sparkles,
+  Heart,
+  TrendingUp,
+  User
 } from "lucide-react";
 
 export default function App() {
@@ -66,9 +70,9 @@ export default function App() {
     stopRecording: stopSpeechRecording 
   } = useSpeechRecognition(onSessionEnd, handleSentenceEnd);
 
-  // Activate 5-second live coach critique
+  // Activate 5-second live coach critique (only on app page)
   useLiveCoachInterval({
-    isRecording: isSpeechRecording,
+    isRecording: view === "app" ? isSpeechRecording : false,
     transcript,
     fillerWords,
     postureFeedback: feedback.message,
@@ -227,145 +231,181 @@ export default function App() {
     });
   }, [segments, activeSegmentIndex, highlightedTranscript]);
 
+  // Mission Header Component (reusable)
+  const MissionHeader = () => (
+    <div className="bg-gradient-to-r from-emerald-600 to-blue-600 text-white py-3 px-4 shadow-lg">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <h2 className="text-sm font-bold tracking-wide">StageSense</h2>
+        <div className="flex items-center gap-2 text-xs bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full border border-white/30">
+          <User className="w-4 h-4" />
+          <span className="font-medium">Default User</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Footer Component
+  const Footer = () => (
+    <footer className="bg-gray-900 text-gray-300 py-6 px-4 mt-auto text-center">
+      <div className="max-w-6xl mx-auto">
+        <p className="text-sm text-gray-400">Made by midanlorrr</p>
+      </div>
+    </footer>
+  );
+
   if (view === "landing") {
-    return <LandingPage onStart={() => setView("app")} />;
+    return (
+      <div className="min-h-screen flex flex-col">
+        <MissionHeader />
+        <LandingPage onStart={() => setView("app")} />
+        <Footer />
+      </div>
+    );
   }
 
   if (view === "analysis") {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
-        <header className="mb-8 flex items-center gap-4 max-w-7xl mx-auto">
-          <button 
-            onClick={() => setView("app")}
-            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Session Analysis</h1>
-            <p className="text-gray-600 text-sm">Review your performance with synchronized playback.</p>
-          </div>
-        </header>
+      <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 font-sans flex flex-col">
+        <MissionHeader />
 
-        <main className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
-          {/* Left Side: Video Playback */}
-          <section className="card-base p-6 flex flex-col h-[calc(100vh-200px)]">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Play className="w-5 h-5 text-indigo-600" />
-              Session Recording
-            </h2>
-            <div className="flex-grow bg-gray-900 rounded-2xl overflow-hidden flex items-center justify-center">
-              {videoUrl ? (
-                <video 
-                  src={videoUrl} 
-                  controls 
-                  className="w-full h-full object-contain"
-                  onTimeUpdate={(e) => setCurrentVideoTime((e.target as HTMLVideoElement).currentTime)}
-                />
-              ) : (
-                <div className="text-center space-y-2">
-                  <Loader2 className="w-8 h-8 text-gray-600 animate-spin mx-auto" />
-                  <p className="text-gray-500">Processing video...</p>
-                </div>
-              )}
+        <div className="p-4 md:p-8">
+          <header className="mb-8 flex items-center gap-4 max-w-7xl mx-auto">
+            <button 
+              onClick={() => setView("app")}
+              className="p-2 hover:bg-emerald-50 rounded-full transition-colors"
+            >
+              <ArrowLeft className="w-6 h-6 text-emerald-600" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">Session Analysis</h1>
+              <p className="text-gray-600 text-sm">Review your performance with synchronized playback.</p>
             </div>
-          </section>
+          </header>
 
-          {/* Right Side: Synchronized Transcript */}
-          <section className="card-base p-6 flex flex-col h-[calc(100vh-200px)]">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Mic className="w-5 h-5 text-emerald-600" />
-              Synchronized Transcript
-            </h2>
-            <div className="flex-grow p-6 bg-gray-50 rounded-2xl border border-gray-100 overflow-y-auto custom-scrollbar mb-6">
-              <div className="text-lg text-gray-800 leading-relaxed">
-                {synchronizedTranscript}
+          <main className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
+            {/* Left Side: Video Playback */}
+            <section className="card-base p-6 flex flex-col h-[calc(100vh-200px)] border-2 border-blue-100 shadow-lg shadow-blue-100/50">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Play className="w-5 h-5 text-blue-600" />
+                <span className="bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent">Session Recording</span>
+              </h2>
+              <div className="flex-grow bg-gray-900 rounded-2xl overflow-hidden flex items-center justify-center">
+                {videoUrl ? (
+                  <video 
+                    src={videoUrl} 
+                    controls 
+                    className="w-full h-full object-contain"
+                    onTimeUpdate={(e) => setCurrentVideoTime((e.target as HTMLVideoElement).currentTime)}
+                  />
+                ) : (
+                  <div className="text-center space-y-2">
+                    <Loader2 className="w-8 h-8 text-gray-600 animate-spin mx-auto" />
+                    <p className="text-gray-500">Processing video...</p>
+                  </div>
+                )}
               </div>
-            </div>
+            </section>
 
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Brain className="w-5 h-5 text-indigo-600" />
-              Coach's Recommendations Log
-            </h2>
-            <div className="h-48 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 overflow-y-auto custom-scrollbar">
-              {coachRecommendations.length > 0 ? (
-                <ul className="space-y-3">
-                  {coachRecommendations.map((rec, i) => (
-                    <li key={i} className="flex gap-3 text-sm text-gray-700">
-                      <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="text-[10px] font-bold text-indigo-600">{i + 1}</span>
-                      </div>
-                      <p>{rec}</p>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-400 text-sm italic text-center py-8">No recommendations logged during this session.</p>
-              )}
-            </div>
-          </section>
-        </main>
+            {/* Right Side: Synchronized Transcript */}
+            <section className="card-base p-6 flex flex-col h-[calc(100vh-200px)] border-2 border-emerald-100 shadow-lg shadow-emerald-100/50">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Mic className="w-5 h-5 text-emerald-600" />
+                <span className="bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">Synchronized Transcript</span>
+              </h2>
+              <div className="flex-grow p-6 bg-gradient-to-br from-emerald-50/30 to-blue-50/30 rounded-2xl border-2 border-emerald-100 overflow-y-auto custom-scrollbar mb-6">
+                <div className="text-lg text-gray-800 leading-relaxed">
+                  {synchronizedTranscript}
+                </div>
+              </div>
+
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Heart className="w-5 h-5 text-emerald-600" />
+                <span className="bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">Supportive Coaching Log</span>
+              </h2>
+              <div className="h-48 p-4 bg-gradient-to-br from-blue-50/50 to-emerald-50/50 rounded-2xl border-2 border-blue-100 overflow-y-auto custom-scrollbar">
+                {coachRecommendations.length > 0 ? (
+                  <ul className="space-y-3">
+                    {coachRecommendations.map((rec, i) => (
+                      <li key={i} className="flex gap-3 text-sm text-gray-700">
+                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-100 to-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-[10px] font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">{i + 1}</span>
+                        </div>
+                        <p>{rec}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-400 text-sm italic text-center py-8">No recommendations logged during this session.</p>
+                )}
+              </div>
+            </section>
+          </main>
+        </div>
+        <Footer />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
-      <header className="mb-8 flex flex-col md:flex-row items-center justify-between gap-4 max-w-6xl mx-auto">
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => setView("landing")}
-            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">StandTall AI</h1>
-            <p className="text-gray-600 text-sm">Your real-time posture and speech coach.</p>
+    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 font-sans flex flex-col">
+      <MissionHeader />
+
+      <div className="p-4 md:p-8">
+        <header className="mb-8 flex flex-col md:flex-row items-center justify-between gap-4 max-w-6xl mx-auto">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setView("landing")}
+              className="p-2 hover:bg-emerald-50 rounded-full transition-colors"
+            >
+              <ArrowLeft className="w-6 h-6 text-emerald-600" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">StandTall AI</h1>
+              <p className="text-gray-600 text-sm">Your compassionate real-time coach for posture and speech.</p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border border-gray-100">
-          <button
-            onClick={() => setShowDebug(!showDebug)}
-            className={`btn-icon ${showDebug ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-400'}`}
-            title="Toggle Debug Info"
-          >
-            <Zap className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleReadPosture}
-            disabled={isSpeakingPosture}
-            className={`btn-icon ${isSpeakingPosture ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-400'}`}
-            title="Test ElevenLabs TTS (Read Posture)"
-          >
-            {isSpeakingPosture ? <Loader2 className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
-          </button>
-          <button
-            onClick={() => setCameraEnabled(!cameraEnabled)}
-            className={`btn-icon ${cameraEnabled ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}
-            title={cameraEnabled ? "Turn Camera Off" : "Turn Camera On"}
-          >
-            {cameraEnabled ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
-          </button>
-          <button
-            onClick={() => setMicEnabled(!micEnabled)}
-            className={`btn-icon ${micEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}
-            title={micEnabled ? "Turn Microphone Off" : "Turn Microphone On"}
-          >
-            {micEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-          </button>
-        </div>
-      </header>
+          <div className="flex items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border border-emerald-100">
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              className={`btn-icon ${showDebug ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-400'}`}
+              title="Toggle Debug Info"
+            >
+              <Zap className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleReadPosture}
+              disabled={isSpeakingPosture}
+              className={`btn-icon ${isSpeakingPosture ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-400'}`}
+              title="Test ElevenLabs TTS (Read Posture)"
+            >
+              {isSpeakingPosture ? <Loader2 className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={() => setCameraEnabled(!cameraEnabled)}
+              className={`btn-icon ${cameraEnabled ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}
+              title={cameraEnabled ? "Turn Camera Off" : "Turn Camera On"}
+            >
+              {cameraEnabled ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={() => setMicEnabled(!micEnabled)}
+              className={`btn-icon ${micEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}
+              title={micEnabled ? "Turn Microphone Off" : "Turn Microphone On"}
+            >
+              {micEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+            </button>
+          </div>
+        </header>
 
-      <main className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
-        {/* Left Column: Webcam and Posture Feedback */}
-        <section className="space-y-6">
-          <div className="card-base p-4">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Camera className="w-5 h-5 text-indigo-600" />
-              Live Feed
-            </h2>
+        <main className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+          {/* Left Column: Webcam and Posture Feedback */}
+          <section className="space-y-6">
+            <div className="card-base p-4 border-2 border-blue-100 shadow-lg shadow-blue-100/50">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Camera className="w-5 h-5 text-blue-600" />
+                <span className="bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent">Live Feed</span>
+              </h2>
             <div className="relative aspect-video bg-gray-900 rounded-2xl overflow-hidden flex items-center justify-center">
               {cameraEnabled ? (
                 <WebcamFeed 
@@ -412,19 +452,19 @@ export default function App() {
                 </div>
               )}
             </div>
-            <div className={`feedback-banner ${feedback.isGood ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-              {cameraEnabled ? feedback.message : "Enable camera for posture feedback"}
+              <div className={`feedback-banner ${feedback.isGood ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                {cameraEnabled ? feedback.message : "Enable camera for posture feedback"}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* Right Column: Speech Tracking and Analysis */}
-        <section className="space-y-6">
-          <div className="card-base p-6 h-full flex flex-col">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Mic className="w-5 h-5 text-emerald-600" />
-              Speech Coach
-            </h2>
+          {/* Right Column: Speech Tracking and Analysis */}
+          <section className="space-y-6">
+            <div className="card-base p-6 h-full flex flex-col border-2 border-emerald-100 shadow-lg shadow-emerald-100/50">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Mic className="w-5 h-5 text-emerald-600" />
+                <span className="bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">Speech Coach</span>
+              </h2>
             
             <div className="flex-grow space-y-6">
               <div className="flex gap-4">
@@ -432,34 +472,34 @@ export default function App() {
                   <button
                     onClick={handleStart}
                     disabled={!micEnabled}
-                    className="btn-primary flex-1 flex items-center justify-center gap-2"
+                    className="btn-primary flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-700 hover:to-blue-700 shadow-lg shadow-emerald-200"
                   >
-                    <Play className="w-5 h-5" />
-                    Start Session
+                    <Sparkles className="w-5 h-5" />
+                    Begin Your Journey
                   </button>
                 ) : isRecording ? (
                   <button
                     onClick={handleStop}
-                    className="btn-primary flex-1 bg-red-600 hover:bg-red-700 flex items-center justify-center gap-2"
+                    className="btn-primary flex-1 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 flex items-center justify-center gap-2 shadow-lg shadow-amber-200"
                   >
                     <MicOff className="w-5 h-5" />
-                    Stop Session
+                    Complete Session
                   </button>
                 ) : (
                   <div className="flex flex-col sm:flex-row gap-4 w-full">
                     <button
                       onClick={handleStart}
-                      className="btn-secondary flex-1 flex items-center justify-center gap-2"
+                      className="btn-secondary flex-1 flex items-center justify-center gap-2 border-2 border-emerald-200 hover:bg-emerald-50"
                     >
                       <RefreshCw className="w-5 h-5" />
-                      Restart
+                      Try Again
                     </button>
                     <button
                       onClick={handleStartAnalysis}
-                      className="btn-primary flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700"
+                      className="btn-primary flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-700 hover:to-blue-700 shadow-lg shadow-emerald-200"
                     >
                       <BarChart3 className="w-5 h-5" />
-                      Start Analysis
+                      View Your Growth
                     </button>
                   </div>
                 )}
@@ -471,72 +511,74 @@ export default function App() {
                 </div>
               )}
 
-              <div className="p-6 bg-gray-50 rounded-2xl min-h-[200px] border border-gray-100 relative overflow-y-auto max-h-[300px]">
-                <p className="label-micro">Session Transcript</p>
-                <p className="text-lg text-gray-800 leading-relaxed whitespace-pre-wrap">
-                  {micEnabled ? (highlightedTranscript || "Your speech will appear here...") : "Microphone is disabled"}
+              <div className="p-6 bg-gradient-to-br from-emerald-50/30 to-blue-50/30 rounded-2xl min-h-[200px] border-2 border-emerald-100 relative overflow-y-auto max-h-[300px]">
+                <p className="label-micro text-emerald-700 font-bold flex items-center gap-2">
+                  <Sparkles className="w-3 h-3" />
+                  Your Voice, Empowered
                 </p>
-                {isRecording && (
-                  <div className="mt-4 flex items-center gap-2 text-gray-400 text-xs italic">
-                    <Zap className="w-3 h-3 animate-pulse text-amber-400" />
-                    Say "end session" to finish automatically
-                  </div>
-                )}
+                <p className="text-lg text-gray-800 leading-relaxed whitespace-pre-wrap mt-2">
+                  {micEnabled ? (highlightedTranscript || "Share your voice and watch yourself grow...") : "Microphone is disabled"}
+                </p>
               </div>
 
               {/* Recommendations Log in App View */}
               <div className="flex-grow flex flex-col min-h-[150px]">
-                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Brain className="w-4 h-4 text-indigo-500" />
-                  Live Advice Log
+                <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Heart className="w-4 h-4 text-emerald-500" />
+                  Supportive Coaching
                 </h3>
-                <div className="flex-grow p-4 bg-white rounded-2xl border border-gray-100 overflow-y-auto custom-scrollbar max-h-[200px]">
+                <div className="flex-grow p-4 bg-white rounded-2xl border-2 border-blue-100 overflow-y-auto custom-scrollbar max-h-[200px]">
                   {coachRecommendations.length > 0 ? (
                     <ul className="space-y-3">
                       {coachRecommendations.map((rec, i) => (
                         <li key={i} className="flex gap-3 text-sm text-gray-700 animate-in fade-in slide-in-from-left-2 duration-300">
-                          <div className="w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center shrink-0 mt-0.5">
-                            <span className="text-[10px] font-bold text-indigo-600">{i + 1}</span>
+                          <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-100 to-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                            <span className="text-[10px] font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">{i + 1}</span>
                           </div>
                           <p>{rec}</p>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-gray-400 text-xs italic text-center py-4">Advice will appear here as you speak.</p>
+                    <p className="text-gray-400 text-xs italic text-center py-4">Your personalized coaching will appear here as you practice.</p>
                   )}
                 </div>
               </div>
+              </div>
             </div>
-          </div>
-        </section>
-      </main>
+          </section>
+        </main>
 
-      {/* Coach's Corner: Live Feedback Bar */}
-      {isRecording && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-4xl px-4 z-50">
-          <div className="bg-white/80 backdrop-blur-xl border border-indigo-100 shadow-2xl rounded-3xl p-6 flex items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-colors ${isAnalyzing ? 'bg-indigo-100 animate-pulse' : 'bg-indigo-600'}`}>
-              {isAnalyzing ? (
-                <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
-              ) : (
-                <Brain className="w-6 h-6 text-white" />
+        {/* Coach's Corner: Live Feedback Bar */}
+        {isRecording && (
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-4xl px-4 z-50">
+            <div className="bg-white/90 backdrop-blur-xl border-2 border-emerald-200 shadow-2xl shadow-emerald-200/50 rounded-3xl p-6 flex items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-colors ${isAnalyzing ? 'bg-gradient-to-br from-emerald-100 to-blue-100 animate-pulse' : 'bg-gradient-to-r from-emerald-600 to-blue-600'}`}>
+                {isAnalyzing ? (
+                  <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
+                ) : (
+                  <Heart className="w-6 h-6 text-white" />
+                )}
+              </div>
+              <div className="flex-grow">
+                <p className="label-micro bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent font-bold mb-1 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-emerald-500" />
+                  Your Support System
+                </p>
+                <p className="text-gray-800 font-medium leading-tight">
+                  {liveFeedback || "We're listening and here to help you grow..."}
+                </p>
+              </div>
+              {liveFeedback && (
+                <div className="shrink-0">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                </div>
               )}
             </div>
-            <div className="flex-grow">
-              <p className="label-micro text-indigo-600 font-bold mb-1">Coach's Corner</p>
-              <p className="text-gray-800 font-medium leading-tight">
-                {liveFeedback || "Speak a full sentence to receive live coaching advice..."}
-              </p>
-            </div>
-            {liveFeedback && (
-              <div className="shrink-0">
-                <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-              </div>
-            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+      <Footer />
     </div>
   );
 }
