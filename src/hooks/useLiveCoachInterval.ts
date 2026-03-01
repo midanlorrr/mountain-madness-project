@@ -31,6 +31,7 @@ export function useLiveCoachInterval(props: LiveCoachIntervalProps) {
   const pendingSpeechRef = useRef<string | null>(null);
   const propsRef = useRef(props);
   const lastPostureIssueRef = useRef<string>("");
+  const lastPostureWarningTimeRef = useRef<number>(0);
   const lastAnalyzedSentenceCountRef = useRef<number>(0);
   const lastSpeechAnalysisTimeRef = useRef<number>(0);
 
@@ -108,6 +109,7 @@ export function useLiveCoachInterval(props: LiveCoachIntervalProps) {
   useEffect(() => {
     if (!props.isRecording) {
       lastPostureIssueRef.current = "";
+      lastPostureWarningTimeRef.current = 0;
       pendingSpeechRef.current = null;
       return;
     }
@@ -146,7 +148,7 @@ export function useLiveCoachInterval(props: LiveCoachIntervalProps) {
       if (!current.transcript) return;
 
       const now = Date.now();
-      if (now - lastSpeechAnalysisTimeRef.current < 3000) {
+      if (now - lastSpeechAnalysisTimeRef.current < 5000) {
         return;
       }
 
@@ -209,16 +211,22 @@ ${JSON.stringify(speechSignal)}
 Likely issue:
 ${likelyIssue}
 
-Give one gentle and concise coaching line (no strict word limit, but keep it short and natural like a real coach).
-Do not mention numbers. Give an actionable suggestion.`;
+Give ONE short coaching line with max 7 words. Be direct and actionable.
+No numbers. Example: "Slow down and take a breath."`;
 
         const response = await ai.models.generateContent({
           model: "gemini-2.5-flash",
           contents: critiquePrompt,
         });
 
-        const critique = response.text.trim();
+        let critique = response.text.trim();
         if (!critique) return;
+
+        // Enforce 7-word max
+        const words = critique.split(/\s+/);
+        if (words.length > 7) {
+          critique = words.slice(0, 7).join(" ");
+        }
 
         if (current.onCoachingGenerated) {
           current.onCoachingGenerated(critique);
